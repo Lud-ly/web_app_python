@@ -30,7 +30,8 @@ pip3 install streamlit
 pip3 install pandas matplotlib
 ```
 
-### Lancer le projet sur localhost:8501
+### Lancer le projet
 ```bash
 streamlit hello
+streamlit run main.py
 ```
