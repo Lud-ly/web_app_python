@@ -35,3 +35,9 @@ pip3 install pandas matplotlib
 streamlit hello
 streamlit run main.py
 ```
+```bash
+brew reinstall python
+python -m certifi
+export SSL_CERT_FILE=$(python -m certifi)
+pip install --upgrade certifi
+```
