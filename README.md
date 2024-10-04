@@ -35,6 +35,7 @@ pip3 install pandas matplotlib
 streamlit hello
 streamlit run main.py
 ```
+### Handling SSL Certificate Verification Errors
 ```bash
 brew reinstall python
 python -m certifi
