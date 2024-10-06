@@ -1,16 +1,13 @@
-from PIL import Image  # Bibliothèque pour ouvrir et manipuler des images
-import streamlit as st  # Framework pour créer des applications web interactives
-from io import BytesIO  # Permet de gérer les flux de données en mémoire (utile pour l'enregistrement d'images)
-from rembg import remove  # Bibliothèque pour supprimer l'arrière-plan des images
+from PIL import Image 
+import streamlit as st
+from io import BytesIO 
+import uuid
+from rembg import remove
 
-default_image = Image.open("./images/goat.jpg") 
-default_deimage = Image.open("./images/dgoat.png")
-
-st.set_page_config(page_title="Détoureur d'images", page_icon="skull", layout="centered")  # Configuration de la page
+st.set_page_config(page_title="Détoureur d'images", page_icon="skull", layout="wide")  # Configuration de la page
 
 # Titre et logo de l'application
 st.sidebar.image("./images/logo.png", width=250)
-st.sidebar.title("Mon détoureur d'images")
 st.write("Ce détoureur d'images est conçu pour supprimer l'arrière-plan d'une image.")
 
 col1, col2 = st.columns(2)
@@ -19,34 +16,64 @@ st.write("**Note:** Ce détoureur fonctionne avec les formats PNG, JPG, WEBP et 
 
 # Fonction pour convertir l'image traitée en un format téléchargeable
 def convert_image_to_downloadable(image):
-   buf = BytesIO()
-   image.save(buf, format="PNG")
-   byte_in = buf.getvalue()
+   thebuf = BytesIO()
+   image.save(thebuf, format="PNG")
+   byte_in = thebuf.getvalue()
    return byte_in  
 
 # Fonction pour traiter l'image (supprimer l'arrière-plan)
-def fix_image(image):
-    # Ouvre l'image téléchargée ou par défaut
+def create_image(image):
+    
+    # Supprime l'arrière-plan de rembg
+    fixed = remove(image) 
+    
+    # Ouvre l'image téléchargée
     col1.write("Image originale")
     col1.image(image)
-    fixed = remove(image)  # Supprime l'arrière-plan
+    
     col2.write("Image détourée")
     col2.image(fixed)
     
+     # Ajouter du CSS pour styliser la colonne 2
+    col2.markdown(
+        """
+        <style>
+        .custom-column {
+            background-color: #f1f3f6; /* Couleur de fond similaire à la sidebar */
+            padding: 10px; /* Espacement intérieur */
+            border-radius: 8px; /* Coins arrondis */
+        }
+        </style>
+        """, 
+        unsafe_allow_html=True
+    )
+    
+    # Appliquer mon style personnalisé à la colonne 2
+    with col2:
+        st.markdown('<div class="custom-column">', unsafe_allow_html=True)
+        st.write("Image détourée")
+        st.image(fixed)
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+     # Générer un identifiant unique pour le nom de fichier
+    unique_id = uuid.uuid4()
+    unique_filename = f"pymage_detouree_{unique_id}.png"
+    
     st.sidebar.write("\n")
     # Crée un bouton pour télécharger l'image détourée
-    st.sidebar.download_button("Télécharger l'image", convert_image_to_downloadable(fixed), 'image_detouree.png', 'image/png')
+    st.sidebar.download_button("Télécharger l'image", convert_image_to_downloadable(fixed), unique_filename, 'image/png')
 
 # Chargement du fichier téléversé
 image_upload = st.sidebar.file_uploader("Glissez-déposez un fichier ici", type=["png", "jpg", "jpeg","webp"])
 
 # Loader pour indiquer le traitement
-if image_upload:
+if image_upload is not None:
     with st.spinner('Traitement de l\'image en cours...'):
         image = Image.open(image_upload)  # Ouvre l'image téléversée
-        fix_image(image)  # Passe l'image téléversée à la fonction de traitement
+        create_image(image)  # Passe l'image téléversée à la fonction de traitement
 else:
+    # Default view
     col1.write("Image originale")
-    col1.image(default_image)
+    col1.image(("./images/goat.jpg"), width=350 )
     col2.write("Image détourée")
-    col2.image(default_deimage)
+    col2.image(("./images/dgoat.png"), width=350)
