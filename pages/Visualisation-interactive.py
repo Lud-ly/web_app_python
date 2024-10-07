@@ -3,7 +3,6 @@ import pandas as pd
 from urllib.error import URLError
 import pydeck as pdk
 
-
 def from_data_file(filename):
     url = (
         "https://raw.githubusercontent.com/streamlit/"
@@ -11,7 +10,12 @@ def from_data_file(filename):
     )
     return pd.read_json(url)
 
+# En-tête de l'application
+st.title("Visualisation de Données avec Pydeck")
+st.markdown("Cette application permet de visualiser différentes couches de données géographiques sur une carte.")
+
 try:
+    # Définition de toutes les couches de la carte
     ALL_LAYERS = {
         "Bike Rentals": pdk.Layer(
             "HexagonLayer",
@@ -53,12 +57,16 @@ try:
             width_max_pixels=30,
         ),
     }
-    st.sidebar.markdown("### Map Layers")
+
+    # Barre latérale pour sélectionner les couches
+    st.sidebar.markdown("### Sélection des Couches de la Carte")
     selected_layers = [
         layer
         for layer_name, layer in ALL_LAYERS.items()
         if st.sidebar.checkbox(layer_name, True)
     ]
+
+    # Affichage de la carte avec les couches sélectionnées
     if selected_layers:
         st.pydeck_chart(
             pdk.Deck(
@@ -73,12 +81,12 @@ try:
             )
         )
     else:
-        st.error("Please choose at least one layer above.")
+        st.error("Veuillez sélectionner au moins une couche ci-dessus.")
+
 except URLError as e:
     st.error(
         """
-        **This demo requires internet access.**
-        Connection error: %s
-    """
-        % e.reason
+        **Cette démo nécessite un accès à Internet.**
+        Erreur de connexion : %s
+        """ % e.reason
     )
