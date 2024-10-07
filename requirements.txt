@@ -1,0 +1,7 @@
+streamlit
+rembg
+PyPDF2
+python-docx
+openpyxl
+fpdf
+pdf2docx

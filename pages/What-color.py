@@ -40,7 +40,7 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
     
     # Afficher l'image
-    st.image(image, caption='Image Téléchargée.', use_column_width=True)
+    st.image(image, caption='Image Téléchargée.', use_column_width=True, width=250)
     
     # Extraire les couleurs dominantes
     dominant_colors = get_dominant_colors(image)
