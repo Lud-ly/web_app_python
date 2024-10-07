@@ -7,7 +7,7 @@ from rembg import remove
 st.set_page_config(page_title="Détoureur d'images", page_icon="skull", layout="wide")  # Configuration de la page
 
 # Titre et logo de l'application
-st.sidebar.image("./images/logo.png", width=250)
+st.image("./images/logo.png", width=250)
 st.write("Ce détoureur d'images est conçu pour supprimer l'arrière-plan d'une image.")
 
 col1, col2 = st.columns(2)
@@ -30,23 +30,6 @@ def create_image(image):
     # Ouvre l'image téléchargée
     col1.write("Image originale")
     col1.image(image)
-    
-    col2.write("Image détourée")
-    col2.image(fixed)
-    
-     # Ajouter du CSS pour styliser la colonne 2
-    col2.markdown(
-        """
-        <style>
-        .custom-column {
-            background-color: #f1f3f6; /* Couleur de fond similaire à la sidebar */
-            padding: 10px; /* Espacement intérieur */
-            border-radius: 8px; /* Coins arrondis */
-        }
-        </style>
-        """, 
-        unsafe_allow_html=True
-    )
     
     # Appliquer mon style personnalisé à la colonne 2
     with col2:
