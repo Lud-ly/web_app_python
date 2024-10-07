@@ -1,111 +1,207 @@
 import streamlit as st
-from PyPDF2 import PdfReader
+import tempfile
+import os
+from typing import Callable, Dict, List, Tuple
+
+# Imports for various file formats
+from PyPDF2 import PdfReader, PdfWriter
 from docx import Document
 import openpyxl
 from fpdf import FPDF
 from pdf2docx import Converter
-import tempfile
-import os
+import csv
+import json
+import xml.etree.ElementTree as ET
 
-# Fonction pour convertir PDF en Word
-def convert_pdf_to_word(pdf_file):
-    # Créez un fichier temporaire
+# Conditional import for PyYAML
+try:
+    import yaml
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
+    st.warning("PyYAML n'est pas installé. La conversion YAML ne sera pas disponible.")
+
+def convert_pdf_to_word(input_file: tempfile._TemporaryFileWrapper) -> str:
+    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx').name
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_pdf:
-        tmp_pdf.write(pdf_file.getbuffer())  # Écrivez le contenu du fichier uploadé
-        tmp_pdf.close()  # Fermez le fichier pour pouvoir le lire
-
-        # Convertir le fichier temporaire en Word
-        word_file = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
+        tmp_pdf.write(input_file.getvalue())
+        tmp_pdf.close()
         cv = Converter(tmp_pdf.name)
-        cv.convert(word_file.name, start=0, end=None)
+        cv.convert(output_file)
         cv.close()
-    return word_file.name
+    return output_file
 
-# Fonction pour convertir Word en PDF
-def convert_word_to_pdf(word_file):
-    pdf_filename = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False).name
-    doc = Document(word_file.name)
+def convert_word_to_pdf(input_file: tempfile._TemporaryFileWrapper) -> str:
+    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf').name
+    doc = Document(input_file)
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-
     for para in doc.paragraphs:
         pdf.multi_cell(0, 10, para.text)
+    pdf.output(output_file)
+    return output_file
 
-    pdf.output(pdf_filename)
-    return pdf_filename
-
-# Fonction pour convertir Excel en PDF
-def convert_excel_to_pdf(excel_file):
-    pdf_filename = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False).name
-    workbook = openpyxl.load_workbook(excel_file.name)
+def convert_excel_to_pdf(input_file: tempfile._TemporaryFileWrapper) -> str:
+    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf').name
+    workbook = openpyxl.load_workbook(input_file)
     pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-
     for sheet in workbook.sheetnames:
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
         ws = workbook[sheet]
         pdf.cell(200, 10, txt=f"Sheet: {sheet}", ln=True)
         for row in ws.iter_rows(values_only=True):
-            pdf.cell(200, 10, txt=str(row), ln=True)
+            pdf.cell(200, 10, txt=" | ".join(str(cell) for cell in row), ln=True)
+    pdf.output(output_file)
+    return output_file
 
-    pdf.output(pdf_filename)
-    return pdf_filename
+def convert_to_text(input_file: tempfile._TemporaryFileWrapper, file_extension: str) -> str:
+    if file_extension == '.pdf':
+        reader = PdfReader(input_file)
+        return "\n".join(page.extract_text() for page in reader.pages)
+    elif file_extension == '.docx':
+        doc = Document(input_file)
+        return "\n".join(para.text for para in doc.paragraphs)
+    elif file_extension == '.xlsx':
+        workbook = openpyxl.load_workbook(input_file)
+        text = []
+        for sheet in workbook.sheetnames:
+            ws = workbook[sheet]
+            text.append(f"Sheet: {sheet}")
+            for row in ws.iter_rows(values_only=True):
+                text.append(" | ".join(str(cell) for cell in row))
+        return "\n".join(text)
+    elif file_extension in ['.csv', '.json', '.xml', '.yaml']:
+        return input_file.getvalue().decode('utf-8')
+    else:
+        return "Unsupported file format for text conversion."
 
-# Fonction pour convertir Word en texte
-def convert_word_to_text(word_file):
-    doc = Document(word_file.name)
-    return "\n".join([para.text for para in doc.paragraphs])
+def convert_to_csv(input_file: tempfile._TemporaryFileWrapper, file_extension: str) -> str:
+    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.csv').name
+    if file_extension == '.xlsx':
+        workbook = openpyxl.load_workbook(input_file)
+        sheet = workbook.active
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            for row in sheet.iter_rows(values_only=True):
+                writer.writerow(row)
+    elif file_extension == '.json':
+        data = json.load(input_file)
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(data[0].keys())
+            for row in data:
+                writer.writerow(row.values())
+    elif file_extension == '.xml':
+        tree = ET.parse(input_file)
+        root = tree.getroot()
+        with open(output_file, 'w', newline='') as f:
+            writer = csv.writer(f)
+            headers = [elem.tag for elem in root[0]]
+            writer.writerow(headers)
+            for child in root:
+                writer.writerow([child.find(elem).text for elem in headers])
+    return output_file
 
-# Fonction principale
+def convert_to_json(input_file: tempfile._TemporaryFileWrapper, file_extension: str) -> str:
+    output_file = tempfile.NamedTemporaryFile(delete=False, suffix='.json').name
+    if file_extension == '.csv':
+        with open(input_file.name, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            data = list(reader)
+        with open(output_file, 'w') as jsonfile:
+            json.dump(data, jsonfile, indent=2)
+    elif file_extension == '.xml':
+        tree = ET.parse(input_file)
+        root = tree.getroot()
+        data = []
+        for child in root:
+            item = {elem.tag: elem.text for elem in child}
+            data.append(item)
+        with open(output_file, 'w') as jsonfile:
+            json.dump(data, jsonfile, indent=2)
+    elif file_extension == '.yaml' and YAML_AVAILABLE:
+        data = yaml.safe_load(input_file)
+        with open(output_file, 'w') as jsonfile:
+            json.dump(data, jsonfile, indent=2)
+    return output_file
+
+# Define conversion functions
+CONVERSION_FUNCTIONS: Dict[Tuple[str, str], Callable] = {
+    ('.pdf', '.docx'): convert_pdf_to_word,
+    ('.docx', '.pdf'): convert_word_to_pdf,
+    ('.xlsx', '.pdf'): convert_excel_to_pdf,
+    ('.pdf', '.txt'): lambda f: convert_to_text(f, '.pdf'),
+    ('.docx', '.txt'): lambda f: convert_to_text(f, '.docx'),
+    ('.xlsx', '.txt'): lambda f: convert_to_text(f, '.xlsx'),
+    ('.csv', '.txt'): lambda f: convert_to_text(f, '.csv'),
+    ('.json', '.txt'): lambda f: convert_to_text(f, '.json'),
+    ('.xml', '.txt'): lambda f: convert_to_text(f, '.xml'),
+    ('.xlsx', '.csv'): lambda f: convert_to_csv(f, '.xlsx'),
+    ('.json', '.csv'): lambda f: convert_to_csv(f, '.json'),
+    ('.xml', '.csv'): lambda f: convert_to_csv(f, '.xml'),
+    ('.csv', '.json'): lambda f: convert_to_json(f, '.csv'),
+    ('.xml', '.json'): lambda f: convert_to_json(f, '.xml'),
+}
+
+# Add YAML conversions only if PyYAML is available
+if YAML_AVAILABLE:
+    CONVERSION_FUNCTIONS[('.yaml', '.txt')] = lambda f: convert_to_text(f, '.yaml')
+    CONVERSION_FUNCTIONS[('.yaml', '.json')] = lambda f: convert_to_json(f, '.yaml')
+
+# Supported file formats
+SUPPORTED_FORMATS: List[str] = ['.pdf', '.docx', '.xlsx', '.txt', '.csv', '.json', '.xml']
+if YAML_AVAILABLE:
+    SUPPORTED_FORMATS.append('.yaml')
+
 def main():
-    st.title("Convertisseur de Fichiers")
+    st.title("Mon Convertisseur de Fichiers")
+    st.write("Ce convertisseur de fichiers polyvalent permet de transformer facilement des documents entre différents formats courants, incluant PDF, Word, Excel, texte brut, CSV, JSON, XML et YAML (si disponible), offrant ainsi une solution pratique pour la conversion de fichiers dans un environnement web interactif.")
     st.image("./images/convert.jpg", width=200)
-    # Upload du fichier
-    uploaded_file = st.file_uploader("Choisissez un fichier...", type=["pdf", "docx", "xlsx"])
+
+    # Afficher les formats pris en charge
+    st.write("Formats pris en charge :", ", ".join(SUPPORTED_FORMATS))
+
+    uploaded_file = st.file_uploader("Choisissez un fichier...", type=[fmt[1:] for fmt in SUPPORTED_FORMATS])
 
     if uploaded_file is not None:
-        # Sélectionner le format de conversion
+        input_extension = os.path.splitext(uploaded_file.name)[1].lower()
+        
+        # Filter available conversion formats based on input file type
+        available_formats = [fmt for fmt in SUPPORTED_FORMATS if (input_extension, fmt) in CONVERSION_FUNCTIONS]
+        
         conversion_format = st.selectbox(
             "Convertir en :",
-            options=["PDF", "Word", "Texte"]
+            options=available_formats
         )
 
-        # Convertir selon le type de fichier et le format sélectionné
-        if conversion_format == "PDF":
-            if uploaded_file.name.endswith(".docx"):
-                st.write("Conversion Word à PDF...")
-                pdf_filename = convert_word_to_pdf(uploaded_file)
-                st.success(f"Fichier converti en PDF : {pdf_filename}")
-                with open(pdf_filename, 'rb') as f:
-                    st.download_button("Télécharger le fichier PDF", f, file_name=os.path.basename(pdf_filename))
-            elif uploaded_file.name.endswith(".xlsx"):
-                st.write("Conversion Excel à PDF...")
-                pdf_filename = convert_excel_to_pdf(uploaded_file)
-                st.success(f"Fichier converti en PDF : {pdf_filename}")
-                with open(pdf_filename, 'rb') as f:
-                    st.download_button("Télécharger le fichier PDF", f, file_name=os.path.basename(pdf_filename))
+        if st.button("Convertir"):
+            conversion_key = (input_extension, conversion_format)
+            if conversion_key in CONVERSION_FUNCTIONS:
+                st.write(f"Conversion de {input_extension} à {conversion_format}...")
+                try:
+                    output_file = CONVERSION_FUNCTIONS[conversion_key](uploaded_file)
+                    st.success(f"Fichier converti avec succès !")
+                    
+                    if conversion_format == '.txt':
+                        with open(output_file, 'r') as f:
+                            text_content = f.read()
+                        st.text_area("Aperçu du contenu converti :", value=text_content[:1000] + "...", height=300)
+                    
+                    # Bouton de téléchargement pour tous les formats
+                    with open(output_file, 'rb') as f:
+                        st.download_button(
+                            label="Télécharger le fichier converti",
+                            data=f,
+                            file_name=f"converted{conversion_format}",
+                            mime=f"application/{conversion_format[1:]}"
+                        )
+                    
+                except Exception as e:
+                    st.error(f"Erreur lors de la conversion : {str(e)}")
             else:
-                st.error("La conversion PDF n'est pas disponible pour ce format.")
-
-        elif conversion_format == "Word":
-            if uploaded_file.name.endswith(".pdf"):
-                st.write("Conversion PDF à Word...")
-                word_file = convert_pdf_to_word(uploaded_file)
-                st.success(f"Fichier converti en Word : {word_file}")
-                with open(word_file, 'rb') as f:
-                    st.download_button("Télécharger le fichier Word", f, file_name=os.path.basename(word_file))
-            else:
-                st.error("La conversion Word n'est pas disponible pour ce format.")
-
-        elif conversion_format == "Texte":
-            if uploaded_file.name.endswith(".docx"):
-                st.write("Conversion Word à Texte...")
-                text_data = convert_word_to_text(uploaded_file)
-                st.success("Fichier converti en texte !")
-                st.text_area("Contenu texte:", value=text_data, height=300)
-            else:
-                st.error("La conversion en texte n'est pas disponible pour ce format.")
+                st.error("Cette conversion n'est pas prise en charge.")
 
 if __name__ == "__main__":
     main()
